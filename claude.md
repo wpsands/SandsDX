@@ -47,7 +47,7 @@
 <!-- Recurring tasks, GTM motions, outreach sequences, reporting cadences, etc. -->
 
 1. **Prospecting & Outreach**
-   -
+   - **Prospect Research Agent** (`agents/prospect_research.py`) - Scrapes a target company site via Firecrawl, outputs structured brief (positioning, product, team, pain points)
 
 2. **Content & Messaging**
    -
