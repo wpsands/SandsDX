@@ -48,6 +48,7 @@
 
 1. **Prospecting & Outreach**
    - **Prospect Research Agent** (`agents/prospect_research.py`) - Scrapes a target company site via Firecrawl, outputs structured brief (positioning, product, team, pain points)
+   - **SEO Audit Agent** (`agents/seo_audit.py`) - Pulls domain rating, backlinks, top keywords, top pages, and referring domains via Ahrefs API
 
 2. **Content & Messaging**
    -

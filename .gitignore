@@ -1,3 +1,4 @@
 .env
 __pycache__/
 prospect_output.json
+seo_audit_output.json
