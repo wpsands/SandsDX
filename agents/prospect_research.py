@@ -12,37 +12,73 @@ Usage:
 import sys
 import os
 import json
-from dotenv import load_dotenv
+import time
+import requests
 
-load_dotenv()
+# Load .env file manually (no dependency needed)
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+if os.path.exists(env_path):
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip())
 
-FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY")
+FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY")
+FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v1"
 
 if not FIRECRAWL_API_KEY:
     print("Error: FIRECRAWL_API_KEY not found in .env")
     sys.exit(1)
 
 
-def scrape_site(url: str) -> dict:
-    """Scrape a URL using Firecrawl and return structured markdown content."""
-    from firecrawl import FirecrawlApp
+def crawl_site(url: str) -> dict:
+    """Crawl a URL using Firecrawl REST API."""
+    headers = {
+        "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
-    app = FirecrawlApp(api_key=FIRECRAWL_API_KEY)
-
-    # Crawl key pages (homepage + up to 10 subpages)
-    print(f"Crawling {url}...")
-    crawl_result = app.crawl_url(
-        url,
-        params={
+    # Start crawl job
+    print(f"Starting crawl of {url}...")
+    resp = requests.post(
+        f"{FIRECRAWL_BASE_URL}/crawl",
+        headers=headers,
+        json={
+            "url": url,
             "limit": 10,
-            "scrapeOptions": {
-                "formats": ["markdown"],
-            },
+            "scrapeOptions": {"formats": ["markdown"]},
         },
-        poll_interval=5,
     )
+    resp.raise_for_status()
+    job = resp.json()
 
-    return crawl_result
+    if not job.get("success"):
+        print(f"Error starting crawl: {job}")
+        sys.exit(1)
+
+    job_id = job["id"]
+    print(f"Crawl started (job: {job_id}). Polling for results...")
+
+    # Poll for completion
+    while True:
+        time.sleep(5)
+        status_resp = requests.get(
+            f"{FIRECRAWL_BASE_URL}/crawl/{job_id}",
+            headers=headers,
+        )
+        status_resp.raise_for_status()
+        result = status_resp.json()
+
+        status = result.get("status")
+        print(f"  Status: {status}")
+
+        if status == "completed":
+            return result
+        elif status in ("failed", "cancelled"):
+            print(f"Crawl failed: {result}")
+            sys.exit(1)
 
 
 def extract_brief(crawl_data: dict) -> dict:
@@ -82,7 +118,6 @@ def print_brief(url: str, brief: dict):
             print(f"  Description: {page['description']}")
         print(f"  Content length: {page['markdown_length']} chars")
         print(f"\n  Preview:")
-        # Print first ~500 chars of content
         preview = page["markdown_preview"][:500]
         for line in preview.split("\n"):
             if line.strip():
@@ -103,16 +138,10 @@ def main():
     if not url.startswith("http"):
         url = f"https://{url}"
 
-    # Scrape
-    crawl_data = scrape_site(url)
-
-    # Extract
+    crawl_data = crawl_site(url)
     brief = extract_brief(crawl_data)
-
-    # Output
     print_brief(url, brief)
 
-    # Save full output as JSON
     output_path = os.path.join(os.path.dirname(__file__), "..", "prospect_output.json")
     with open(output_path, "w") as f:
         json.dump({"url": url, "brief": brief}, f, indent=2)
